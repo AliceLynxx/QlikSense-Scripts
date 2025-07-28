@@ -1,92 +1,241 @@
+/*
+================================================================================
+QLIKSENSE SCRIPT DOCUMENTATION - TEST APP
+================================================================================
+
+Script Name: Test App Script
+Purpose: Load and transform dealer sales data from Excel source
+Data Source: Dealer Sales.xlsx (via Data - Prorail library)
+Last Updated: [Current Date]
+
+OVERVIEW:
+This script loads sales data from multiple sheets in an Excel workbook,
+creating a star schema data model for dealer sales analysis.
+
+DATA MODEL STRUCTURE:
+- Fact Table: Revenue (contains sales transactions)
+- Dimension Tables: Date, Branch, Dealer, Product, Country
+- Additional: Country2 (country name mapping)
+
+RELATIONSHIPS:
+Revenue connects to all dimension tables via ID fields:
+- Date_ID → Date table
+- Branch_ID → Branch table  
+- Dealer_ID → Dealer table
+- Model_ID → Product table
+- Country_ID (via Dealer) → Country table
+
+================================================================================
+*/
+
 ///$tab Main
-SET ThousandSep=',';
-SET DecimalSep='.';
-SET MoneyThousandSep=',';
-SET MoneyDecimalSep='.';
-SET MoneyFormat='$#,##0.00;-$#,##0.00';
-SET TimeFormat='h:mm:ss TT';
-SET DateFormat='M/D/YYYY';
-SET TimestampFormat='M/D/YYYY h:mm:ss[.fff] TT';
-SET FirstWeekDay=6;
-SET BrokenWeeks=1;
-SET ReferenceDay=0;
-SET FirstMonthOfYear=1;
-SET CollationLocale='en-US';
-SET CreateSearchIndexOnReload=1;
+/*
+================================================================================
+MAIN TAB - SYSTEM SETTINGS
+================================================================================
+This section sets up regional and formatting settings for the QlikSense app.
+All settings are configured for US locale and formatting standards.
+================================================================================
+*/
+
+// Number and currency formatting settings
+SET ThousandSep=',';                    // Thousands separator
+SET DecimalSep='.';                     // Decimal separator  
+SET MoneyThousandSep=',';               // Currency thousands separator
+SET MoneyDecimalSep='.';                // Currency decimal separator
+SET MoneyFormat='$#,##0.00;-$#,##0.00'; // Currency display format
+
+// Date and time formatting settings
+SET TimeFormat='h:mm:ss TT';            // Time format (12-hour with AM/PM)
+SET DateFormat='M/D/YYYY';              // Date format (US standard)
+SET TimestampFormat='M/D/YYYY h:mm:ss[.fff] TT'; // Timestamp format
+
+// Calendar settings
+SET FirstWeekDay=6;                     // First day of week (Saturday = 6)
+SET BrokenWeeks=1;                      // Allow broken weeks
+SET ReferenceDay=0;                     // Reference day for week calculations
+SET FirstMonthOfYear=1;                 // First month of year (January)
+
+// Locale and search settings
+SET CollationLocale='en-US';            // Text sorting locale
+SET CreateSearchIndexOnReload=1;        // Create search index on reload
+
+// Month and day name definitions
 SET MonthNames='Jan;Feb;Mar;Apr;May;Jun;Jul;Aug;Sep;Oct;Nov;Dec';
 SET LongMonthNames='January;February;March;April;May;June;July;August;September;October;November;December';
 SET DayNames='Mon;Tue;Wed;Thu;Fri;Sat;Sun';
 SET LongDayNames='Monday;Tuesday;Wednesday;Thursday;Friday;Saturday;Sunday';
+
+// Numerical abbreviation settings (K, M, B, etc.)
 SET NumericalAbbreviation='3:k;6:M;9:G;12:T;15:P;18:E;21:Z;24:Y;-3:m;-6:μ;-9:n;-12:p;-15:f;-18:a;-21:z;-24:y';
 
 
 
 
 ///$tab Section
+/*
+================================================================================
+DATA LOADING SECTION
+================================================================================
+This section loads all data tables from the Excel source file.
+Each table represents a different aspect of the dealer sales data model.
+================================================================================
+*/
+
+/*
+--------------------------------------------------------------------------------
+DATE DIMENSION TABLE
+--------------------------------------------------------------------------------
+Purpose: Provides date hierarchy and calendar information
+Fields: Date_ID (key), Date, year, Month, Quarter, Date_ID1
+Usage: Links to Revenue table via Date_ID for time-based analysis
+--------------------------------------------------------------------------------
+*/
 Date:
 LOAD
-    Date_ID,
-    "Date",
-    "year",
-    "Month",
-    Quarter,
-    Date_ID1
+    Date_ID,        // Primary key for date dimension
+    "Date",         // Actual date value
+    "year",         // Year component
+    "Month",        // Month component  
+    Quarter,        // Quarter component
+    Date_ID1        // Alternative date ID (if needed)
 FROM [lib://Data - Prorail (vps-17006-1508_wnieuwenhuizen)/Dealer Sales.xlsx]
 (ooxml, embedded labels, table is Date);
 
+/*
+--------------------------------------------------------------------------------
+BRANCH DIMENSION TABLE  
+--------------------------------------------------------------------------------
+Purpose: Contains branch/location information for sales analysis
+Fields: Branch_ID (key), Branch_NM
+Usage: Links to Revenue table via Branch_ID
+Note: Country_Name field is commented out (may be redundant with Country table)
+--------------------------------------------------------------------------------
+*/
 Branch:
 LOAD
-    Branch_ID,
-    Branch_NM
-    //Country_Name
+    Branch_ID,      // Primary key for branch dimension
+    Branch_NM       // Branch name
+    //Country_Name  // Country name (commented out - available if needed)
 FROM [lib://Data - Prorail (vps-17006-1508_wnieuwenhuizen)/Dealer Sales.xlsx]
 (ooxml, embedded labels, table is Branch);
 
+/*
+--------------------------------------------------------------------------------
+REVENUE FACT TABLE
+--------------------------------------------------------------------------------
+Purpose: Main fact table containing sales transactions and metrics
+Fields: Multiple foreign keys + Units_Sold, Revenue measures
+Usage: Central table that connects to all dimension tables
+This is the primary table for sales analysis and reporting
+--------------------------------------------------------------------------------
+*/
 Revenue:
 LOAD
-    Dealer_ID,
-    Model_ID,
-    Branch_ID,
-    Date_ID,
-    Units_Sold,
-    Revenue
+    Dealer_ID,      // Foreign key to Dealer table
+    Model_ID,       // Foreign key to Product table  
+    Branch_ID,      // Foreign key to Branch table
+    Date_ID,        // Foreign key to Date table
+    Units_Sold,     // Measure: Number of units sold
+    Revenue         // Measure: Revenue amount
 FROM [lib://Data - Prorail (vps-17006-1508_wnieuwenhuizen)/Dealer Sales.xlsx]
 (ooxml, embedded labels, table is Revenue);
 
+/*
+--------------------------------------------------------------------------------
+DEALER DIMENSION TABLE
+--------------------------------------------------------------------------------
+Purpose: Contains dealer/customer information and geographic details
+Fields: Dealer_ID (key), names, location info, Country_ID
+Usage: Links to Revenue table via Dealer_ID, connects to Country via Country_ID
+--------------------------------------------------------------------------------
+*/
 Dealer:
 LOAD
-    Dealer_ID,
-    Dealer_NM,
-    Location_ID,
-    Location_NM,
-    Country_ID
+    Dealer_ID,      // Primary key for dealer dimension
+    Dealer_NM,      // Dealer name
+    Location_ID,    // Location identifier
+    Location_NM,    // Location name
+    Country_ID      // Foreign key to Country table
 FROM [lib://Data - Prorail (vps-17006-1508_wnieuwenhuizen)/Dealer Sales.xlsx]
 (ooxml, embedded labels, table is Dealer);
 
+/*
+--------------------------------------------------------------------------------
+PRODUCT DIMENSION TABLE
+--------------------------------------------------------------------------------
+Purpose: Contains product and model information for sales analysis
+Fields: Product_ID, Product_Name, Model_ID (key), Model_Name, additional fields
+Usage: Links to Revenue table via Model_ID
+Note: Fields E, F, G appear to be placeholder/additional product attributes
+Note: Source table name has typo "Procduct" instead of "Product"
+--------------------------------------------------------------------------------
+*/
 Product:
 LOAD
-    Product_ID,
-    Product_Name,
-    Model_ID,
-    Model_Name,
-    "E",
-    F,
-    G
+    Product_ID,     // Product identifier
+    Product_Name,   // Product name
+    Model_ID,       // Primary key (links to Revenue table)
+    Model_Name,     // Model name
+    "E",            // Additional product attribute E
+    F,              // Additional product attribute F
+    G               // Additional product attribute G
 FROM [lib://Data - Prorail (vps-17006-1508_wnieuwenhuizen)/Dealer Sales.xlsx]
-(ooxml, embedded labels, table is Procduct);
+(ooxml, embedded labels, table is Procduct);  // Note: typo in source table name
 
+/*
+--------------------------------------------------------------------------------
+COUNTRY DIMENSION TABLE
+--------------------------------------------------------------------------------
+Purpose: Contains country information for geographic analysis
+Fields: Country_ID (key), Country_Name
+Usage: Links to Dealer table via Country_ID for geographic reporting
+--------------------------------------------------------------------------------
+*/
 Country:
 LOAD
-    Country_ID,
-    Country_Name
+    Country_ID,     // Primary key for country dimension
+    Country_Name    // Country name
 FROM [lib://Data - Prorail (vps-17006-1508_wnieuwenhuizen)/Dealer Sales.xlsx]
 (ooxml, embedded labels, table is Country);
 
-
+/*
+--------------------------------------------------------------------------------
+COUNTRY MAPPING TABLE (ADDITIONAL)
+--------------------------------------------------------------------------------
+Purpose: Provides alternative country names or country name standardization
+Source: Separate Excel file for country name mapping
+Fields: Country_Name, Country_Name2
+Usage: Can be used to standardize or provide alternative country names
+Note: This creates a separate table that may need to be linked manually
+--------------------------------------------------------------------------------
+*/
 Country2:
 LOAD
-    Country_Name,
-    Country_Name2
+    Country_Name,   // Original country name
+    Country_Name2   // Alternative/standardized country name
 FROM [lib://AttachedFiles/new countrie names.xlsx]
 (ooxml, embedded labels, table is Sheet1);
 
+/*
+================================================================================
+END OF SCRIPT
+================================================================================
+
+NOTES FOR DEVELOPERS:
+1. The script creates a star schema with Revenue as the fact table
+2. All dimension tables connect to Revenue via their respective ID fields
+3. Country2 table may need manual association or JOIN if country name 
+   standardization is required
+4. Consider adding data quality checks and error handling for production use
+5. The Product table source has a typo ("Procduct") that should be verified
+6. Additional fields E, F, G in Product table may need proper naming
+
+PERFORMANCE CONSIDERATIONS:
+- Consider adding WHERE clauses to filter unnecessary data
+- Index key fields if performance issues arise
+- Monitor memory usage with large datasets
+- Consider incremental loading for regular updates
+
+================================================================================
+*/
